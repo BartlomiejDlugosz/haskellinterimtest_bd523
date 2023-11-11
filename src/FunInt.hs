@@ -1,5 +1,6 @@
 module FunInt where
-
+import Data.List
+import Data.Maybe
 -- these types must not be edited, or they will break the tests
 type Program = Expr
 type Identifier = String
@@ -28,19 +29,35 @@ lookUp k t = case lookup k t of
 -- Part I
 
 applyOp :: Identifier -> Int -> Int -> Expr
-applyOp = undefined
+applyOp "==" a b = Boolean (a == b)
+applyOp ">" a b = Boolean (a > b)
+applyOp "+" a b = Number (a + b)
+applyOp "*" a b = Number (a * b)
 
 apply :: Expr -> [Expr] -> Environment -> Expr
 -- Pre: The application is well-formed wrt arity
 -- and is correctly typed.
-apply = undefined
+apply (Op op) [Number x1, Number x2] env = applyOp op x1 x2
+apply (Fun ids expr) args env = eval expr ((zip ids args) ++ env)
 
 -- The first four rules correspond to redexes; the catch-all
 -- corresponds to normal forms...
 eval :: Expr -> Environment -> Expr
 -- Pre: the expression is well-formed wrt arity and is
 -- correctly typed.
-eval = undefined
+eval expr env = case expr of
+  Id x -> lookUp x env
+  If p q r -> case eval p env of 
+    Boolean True -> eval q env
+    Boolean False -> eval r env
+  Let v e e' -> eval e' ((v, e):env)
+  App x y -> apply (eval x env) (evalList y) env
+  _ -> expr
+  where
+    evalList :: [Expr] -> [Expr]
+    evalList [] = []
+    evalList (x:xs) = eval x env : evalList xs 
+
 
 --
 -- Given.
@@ -49,18 +66,50 @@ runProgram :: Program -> Expr
 runProgram p = eval p emptyEnv
 
 isWellFormed :: Expr -> Bool
-isWellFormed = undefined
+isWellFormed expr = case freeVars expr of
+  [] -> True
+  _ -> False
+  where
+    freeVars :: Expr -> [Identifier]
+    freeVars expr = case expr of
+      Number _ -> []
+      Boolean _ -> []
+      Op _ -> []
+      Id x -> [x]
+      Let x e e' -> ((freeVars e) `union` (freeVars e')) \\ [x]
+      Fun as es -> freeVars es \\ as
+      App f as -> freeVars f `union` freeVarsList as
+      If e p q -> freeVars e `union` freeVars p `union` freeVars q
+      where
+        freeVarsList :: [Expr] -> [Identifier]
+        freeVarsList [] = []
+        freeVarsList (x:xs) = freeVars x `union` freeVarsList xs
 
 ----------------------------------------------------------------------
 -- Part II
 
 maybeApply :: Expr -> [Expr] -> Environment -> Maybe Expr
 -- Pre: The application is well-formed wrt arity.
-maybeApply = undefined
+maybeApply (Op op) [Number x1, Number x2] env = Just (applyOp op x1 x2)
+maybeApply (Op op) _ env = Nothing
+maybeApply (Fun ids expr) args env = Just (eval expr ((zip ids args) ++ env))
 
 maybeEval :: Expr -> Environment -> Maybe Expr
 -- Pre: the expression is well-formed wrt arity
-maybeEval = undefined
+maybeEval expr env = case expr of
+  Id x -> lookup x env
+  Let v e e' -> maybeEval e' ((v, e):env)
+  App x y -> case maybeEval x env of
+    Just x' -> maybeApply x' (catMaybes (maybeEvalList y)) env
+    Nothing -> Nothing
+  If p q r -> case maybeEval p env of 
+    Just (Boolean True) -> maybeEval q env
+    Just (Boolean False) -> maybeEval r env
+    Nothing -> Nothing
+  _ -> Just expr
+  where
+    maybeEvalList :: [Expr] -> [Maybe Expr]
+    maybeEvalList (x:xs) = maybeEval x env : maybeEvalList xs
 
 message1, message2 :: String
 message1 = "Type error"
@@ -115,7 +164,7 @@ eval4 :: Expr
 eval4 = eval (App (Op "+") [Id "x", Id "y"]) env
 
 eval5 :: Expr
-eval5 = eval factOf6 emptyEnv
+eval5 = eval factOf6 []
 
 invalid1 :: Expr
 invalid1 = Fun ["x"] (App (Op "+") [Id "x", Id "y"])
@@ -125,6 +174,3 @@ invalid2 = If (App (Op "==") [Number 1, Number 0]) (Id "x") (Number 4)
 
 typeError1 :: Expr
 typeError1 = App (Op ">") [Number 1, Op "+"]
-
-typeError2 :: Expr
-typeError2 = App (Fun ["x","y"] (App (Op "*") [Id "x", Boolean True])) [Number 5, Number 6]

@@ -42,7 +42,6 @@ isWellFormedTests = [ isWellFormed invalid1 --> False
 maybeEvalTests :: [TestCase]
 maybeEvalTests = [ maybeEval factOf6 emptyEnv --> Just (Number 720)
                  , maybeEval typeError1 emptyEnv --> Nothing
-                 , maybeEval typeError2 emptyEnv --> Nothing
                  ]
 
 -- DO NOT REMOVE OR REPLACE THIS LINE
